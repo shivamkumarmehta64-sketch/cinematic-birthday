@@ -1,6 +1,7 @@
 'use client';
 
 import { loadImage } from './image';
+import type { Gender } from './birthday';
 
 export const STORY_W = 1080;
 export const STORY_H = 1920;
@@ -28,7 +29,15 @@ export function themeById(id: string): StoryTheme {
   return THEMES.find((t) => t.id === id) ?? THEMES[0];
 }
 
-const TITLES = ['Sweetheart', 'Baddie', 'Angel', 'Dreamgirl', 'Icon', 'Stunner', 'Babe', 'Darling', 'Sunshine', 'Queen'];
+const TITLES: Record<Gender, string[]> = {
+  girl: ['Sweetheart', 'Baddie', 'Angel', 'Dreamgirl', 'Icon', 'Stunner', 'Babe', 'Darling', 'Sunshine', 'Queen'],
+  boy: ['Legend', 'G.O.A.T', 'King', 'Champ', 'Icon', 'Beast', 'Star', 'Hero', 'Boss', 'Leader'],
+  custom: ['Legend', 'Star', 'Icon', 'Champion', 'Sunshine', 'Hero', 'Amazing', 'Ace', 'MVP', 'Legend'],
+};
+
+export function titlesFor(gender?: Gender): string[] {
+  return TITLES[gender ?? 'custom'];
+}
 
 function rr(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
   ctx.beginPath();
@@ -181,11 +190,13 @@ export async function makeStoryCards(
   photos: string[],
   name: string,
   theme: StoryTheme,
-  upTo = 10
+  upTo = 10,
+  gender?: Gender
 ): Promise<CardResult[]> {
   await ensureFonts();
   const list = photos.slice(0, upTo);
   const results: CardResult[] = [];
+  const titles = titlesFor(gender);
   for (let i = 0; i < list.length; i++) {
     const canvas = document.createElement('canvas');
     canvas.width = STORY_W;
@@ -195,7 +206,7 @@ export async function makeStoryCards(
     drawBackground(ctx, theme);
     const img = await loadImage(list[i]).catch(() => null);
     drawPhotoCard(ctx, img, theme, 1);
-    const title = `${TITLES[i % TITLES.length]} • ${name}`;
+    const title = `${titles[i % titles.length]} • ${name}`;
     drawTitle(ctx, theme, title);
     if (i === 0) {
       ctx.save();
@@ -234,11 +245,12 @@ export async function recordStoryVideo(
   photos: string[],
   name: string,
   theme: StoryTheme,
-  opts: { perPhoto?: number; crossfade?: number; musicUrl?: string; onProgress?: (p: number) => void } = {}
+  opts: { perPhoto?: number; crossfade?: number; musicUrl?: string; onProgress?: (p: number) => void; gender?: Gender } = {}
 ): Promise<VideoResult> {
   const per = opts.perPhoto ?? 2.8;
   const xf = opts.crossfade ?? 0.7;
   await ensureFonts();
+  const titles = titlesFor(opts.gender);
   const list = photos.slice(0, 10);
   const canvas = document.createElement('canvas');
   canvas.width = STORY_W;
@@ -297,7 +309,7 @@ export async function recordStoryVideo(
         drawPhotoCard(ctx, imgs[idx], theme, 1);
       }
 
-      drawTitle(ctx, theme, idx === 0 ? `Happy Birthday, ${name}! 🎂` : `${TITLES[idx % TITLES.length]} • ${name}`);
+      drawTitle(ctx, theme, idx === 0 ? `Happy Birthday, ${name}! 🎂` : `${titles[idx % titles.length]} • ${name}`);
       confettiBurst(ctx, theme, idx === 0 ? 1 : 0.35);
       if (opts.onProgress) opts.onProgress(Math.min(1, pos / total));
       if (pos >= total) {

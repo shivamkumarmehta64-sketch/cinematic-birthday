@@ -3,7 +3,7 @@
 import React, { useState, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { compressFile } from '../../lib/image';
-import { packShareable, shareUrl, pack, DEFAULT_MESSAGE, BirthdayData } from '../../lib/birthday';
+import { packShareable, shareUrl, pack, defaultMessageFor, GENDERS, BirthdayData, Gender } from '../../lib/birthday';
 import { makeStoryCards, recordStoryVideo, themeById, THEMES, downloadCanvas } from '../../lib/story';
 
 const MAX_PHOTOS = 8;
@@ -11,6 +11,7 @@ const MAX_PHOTOS = 8;
 export default function CreatePage() {
   const [name, setName] = useState('');
   const [message, setMessage] = useState('');
+  const [gender, setGender] = useState<Gender>('custom');
   const [photos, setPhotos] = useState<string[]>([]);
   const [themeId, setThemeId] = useState('pink');
   const [busy, setBusy] = useState<string | null>(null);
@@ -18,6 +19,15 @@ export default function CreatePage() {
   const [result, setResult] = useState<{ url: string } | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
   const theme = themeById(themeId);
+
+  const pickGender = useCallback((g: Gender) => {
+    setGender(g);
+    setMessage((prev) =>
+      !prev.trim() || prev === defaultMessageFor('girl') || prev === defaultMessageFor('boy') || prev === defaultMessageFor('custom')
+        ? defaultMessageFor(g)
+        : prev
+    );
+  }, []);
 
   const addFiles = useCallback(async (files: FileList | null) => {
     if (!files) return;
@@ -36,8 +46,9 @@ export default function CreatePage() {
 
   const buildData = (): BirthdayData => ({
     name: name.trim() || 'Cutie',
-    message: message.trim() || DEFAULT_MESSAGE,
+    message: message.trim() || defaultMessageFor(gender),
     photos: photos.slice(0, MAX_PHOTOS),
+    gender,
   });
 
   const preview = useCallback(async () => {
@@ -61,12 +72,12 @@ export default function CreatePage() {
     if (!photos.length) return;
     setBusy('drawing story cards…');
     const d = buildData();
-    const cards = await makeStoryCards(photos, d.name, theme, 10);
+    const cards = await makeStoryCards(photos, d.name, theme, 10, d.gender);
     cards.forEach((c, i) => {
       window.setTimeout(() => downloadCanvas(c.canvas, `story-card-${i + 1}-${d.name}.png`), i * 250);
     });
     setBusy(null);
-  }, [photos, name, message, theme]);
+  }, [photos, name, message, theme, gender]);
 
   const makeVideo = useCallback(async () => {
     if (!photos.length) return;
@@ -78,6 +89,7 @@ export default function CreatePage() {
         crossfade: 0.7,
         musicUrl: '/music.mp4',
         onProgress: (p) => setProgress(p),
+        gender: d.gender,
       });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
@@ -91,7 +103,7 @@ export default function CreatePage() {
     }
     setProgress(0);
     setBusy(null);
-  }, [photos, name, message, theme]);
+  }, [photos, name, message, theme, gender]);
 
   return (
     <main className="create-page">
@@ -102,8 +114,26 @@ export default function CreatePage() {
       </header>
 
       <section className="create-card">
-        <label className="field-label" htmlFor="name">Who is the birthday person?</label>
-        <input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. My Girl, Priya, Mom…" className="text-input" maxLength={40} />
+        <div className="field-label">
+          Who is the birthday for?
+          <span className="field-hint">Pick a vibe — the message &amp; story style adapt automatically</span>
+        </div>
+        <div className="gender-row">
+          {GENDERS.map((g) => (
+            <button
+              key={g.id}
+              onClick={() => pickGender(g.id)}
+              className={`gender-chip ${g.id === gender ? 'active' : ''}`}
+            >
+              <span className="gender-emoji">{g.emoji}</span>
+              <span className="gender-label">{g.label}</span>
+              <span className="gender-hint">{g.hint}</span>
+            </button>
+          ))}
+        </div>
+
+        <label className="field-label" htmlFor="name">Their name</label>
+        <input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Priya, Aryan, Mom, Best friend…" className="text-input" maxLength={40} />
 
         <label className="field-label" htmlFor="msg">A short love note / message</label>
         <textarea id="msg" value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Write something heartfelt…" className="text-area" rows={4} maxLength={600} />

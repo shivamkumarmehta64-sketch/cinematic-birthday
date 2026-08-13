@@ -1,13 +1,22 @@
 'use client';
 
+export type Gender = 'girl' | 'boy' | 'custom';
+
 export type BirthdayData = {
   name: string;
   message: string;
   photos: string[];
+  gender?: Gender;
 };
 
-// Default message used when no custom one is given.
-export const DEFAULT_MESSAGE = `Happiest birthday my gurl 😍✨
+export const GENDERS: { id: Gender; label: string; emoji: string; hint: string }[] = [
+  { id: 'girl', label: 'For her', emoji: '🌸', hint: 'Dreamy, warm & a little romantic' },
+  { id: 'boy', label: 'For him', emoji: '🎂', hint: 'Fun, legendary & full of hype' },
+  { id: 'custom', label: 'Anyone', emoji: '✨', hint: 'Neutral — works for friends, family & everyone' },
+];
+
+// Default messages used when no custom one is given.
+export const DEFAULT_MESSAGE_GIRL = `Happiest birthday my gurl 😍✨
 
 I pray you achieve all your dreams, stay happy, and keep smiling the way you do... because that smile is my favorite thing ❤️
 
@@ -17,11 +26,36 @@ Let's share unlimited laughs, love, fights, and happiness 🌈
 
 I love you forever and ever and ever 💕
 
-Thankyou for being my partner in every sense, happy 19th darlzzz 🎂❤️😍
+Thankyou for being my partner in every sense, happy birthday darlzzz 🎂❤️😍
 
 Please be with me chelloo 🥹💘`;
 
-export const DEFAULT_NAME = 'My Girl';
+export const DEFAULT_MESSAGE_BOY = `Happiest birthday brother 💥🎂
+
+You're not just a friend, you're family... and there's no one quite like you 🔥
+
+Keep chasing your dreams, keep breaking the game, and never let anyone dull your shine 💪
+
+Let's stack more memories, more laughter, and more unforgettable days together 🌟
+
+From the inside jokes to the late-night talks, everything hits different with you 🚀
+
+Stay legendary, stay humble, and happy birthday king 👑❤️`;
+
+export const DEFAULT_MESSAGE_CUSTOM = `Happiest birthday to you 🎂✨
+
+You are a light in so many lives, and I hope today gives you a fraction of the joy you bring to others ❤️
+
+May your year overflow with good health, big dreams, small wins, and people who love you 🌈
+
+Here's to celebrating you, your journey, and everything still ahead 🌟
+
+Enjoy every moment of today — you earned it 🎉`;
+
+// Default message used when no custom one is given.
+export const DEFAULT_MESSAGE = DEFAULT_MESSAGE_CUSTOM;
+
+export const DEFAULT_NAME = 'Friend';
 
 // Classic site default: the 13 photos already shipped with the app.
 export const DEFAULT_PHOTOS: string[] = [
@@ -86,14 +120,22 @@ export function unpack(packed: string): BirthdayData {
   const json = new TextDecoder().decode(new Uint8Array(bytes));
   try {
     const parsed = JSON.parse(json) as Partial<BirthdayData>;
+    const gender = ['girl', 'boy', 'custom'].includes(String(parsed.gender)) ? (parsed.gender as Gender) : undefined;
     return {
       name: typeof parsed.name === 'string' ? parsed.name : DEFAULT_NAME,
-      message: typeof parsed.message === 'string' ? parsed.message : DEFAULT_MESSAGE,
+      message: typeof parsed.message === 'string' ? parsed.message : (gender ? defaultMessageFor(gender) : DEFAULT_MESSAGE),
       photos: Array.isArray(parsed.photos) ? parsed.photos.map(String).filter(Boolean) : DEFAULT_PHOTOS,
+      gender,
     };
   } catch {
     return DEFAULT_DATA;
   }
+}
+
+export function defaultMessageFor(gender?: Gender): string {
+  if (gender === 'girl') return DEFAULT_MESSAGE_GIRL;
+  if (gender === 'boy') return DEFAULT_MESSAGE_BOY;
+  return DEFAULT_MESSAGE_CUSTOM;
 }
 
 // Pack a data for URL sharing: photos are shrunk to keep the URL short.
@@ -106,7 +148,7 @@ export async function packShareable(data: BirthdayData, maxPhotos = 6): Promise<
       photos.push(src);
     }
   }
-  return { name: data.name, message: data.message, photos };
+  return { name: data.name, message: data.message, photos, gender: data.gender };
 }
 
 export function shareUrl(data: BirthdayData): string {
