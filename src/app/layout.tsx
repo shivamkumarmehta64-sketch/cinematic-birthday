@@ -32,6 +32,17 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className={`${cormorant.variable} ${quicksand.variable} h-full antialiased`}>
       <body className="antialiased">
         {children}
+        <footer className="fixed bottom-3 right-4 z-50">
+          <a
+            href="https://github.com/shivamkumarmehta64-sketch/Black-Firefox"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs opacity-40 transition-opacity hover:opacity-100"
+            style={{ color: "rgba(255,255,255,0.7)" }}
+          >
+            Built by Shivam · try Black Firefox ↗
+          </a>
+        </footer>
       </body>
     </html>
   );
