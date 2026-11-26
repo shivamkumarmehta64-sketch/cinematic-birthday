@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, Suspense, useRef } from 'react';
+import React, { useState, useMemo, Suspense, useRef, useEffect } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { Html, OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
@@ -8,6 +8,14 @@ import * as THREE from 'three';
 export type PhotoCard = { id: string; imageUrl: string; alt: string; title: string };
 
 const PHI = (1 + Math.sqrt(5)) / 2;
+
+function seededRand(seed: number) {
+  let s = seed >>> 0;
+  return () => {
+    s = (s * 1664525 + 1013904223) >>> 0;
+    return s / 0x100000000;
+  };
+}
 
 function CardSprite({ card, position, onSelect }: { card: PhotoCard; position: [number, number, number]; onSelect: (c: PhotoCard) => void }) {
   const mesh = useRef<THREE.Group>(null);
@@ -28,7 +36,7 @@ function CardSprite({ card, position, onSelect }: { card: PhotoCard; position: [
         <boxGeometry args={[4.5, 5.4, 0.1]} />
         <meshBasicMaterial transparent opacity={0} />
       </mesh>
-      <Html position={[0, 0, 0]} transform distanceFactor={10} zIndexRange={[10, 0]} style={{ transition: 'all 0.3s ease', transform: hover ? 'scale(1.15)' : 'scale(1)' }}>
+      <Html position={[0, 0, 0]} transform distanceFactor={10} zIndexRange={[10, 0]} pointerEvents="none" style={{ transition: 'all 0.3s ease', transform: hover ? 'scale(1.15)' : 'scale(1)' }}>
         <div className="w-36 h-44 rounded-lg overflow-hidden shadow-2xl bg-[#1F2121] p-2 select-none" style={{ boxShadow: hover ? '0 25px 50px rgba(49,184,198,0.5), 0 0 30px rgba(49,184,198,0.3)' : '0 15px 30px rgba(0,0,0,0.6)', border: hover ? '2px solid rgba(49,184,198,0.5)' : '1px solid rgba(255,255,255,0.1)' }}>
           <img src={card.imageUrl} alt={card.alt} className="w-full h-36 object-cover rounded-md" loading="lazy" draggable={false} />
           <div className="mt-1 text-center">
@@ -42,23 +50,22 @@ function CardSprite({ card, position, onSelect }: { card: PhotoCard; position: [
 
 function Stars() {
   const ref = useRef<THREE.Points>(null);
-  const positions = useRef(
-    Array.from({ length: 1800 }, () => {
-      const r = 8 + Math.random() * 25;
-      const theta = Math.random() * Math.PI * 2;
-      const phi = Math.acos(2 * Math.random() - 1);
-      return [
-        r * Math.sin(phi) * Math.cos(theta),
-        r * Math.sin(phi) * Math.sin(theta),
-        r * Math.cos(phi),
-      ];
-    })
-  ).current;
   const geo = useMemo(() => {
+    const rand = seededRand(42);
+    const coords = new Float32Array(1800 * 3);
+    for (let i = 0; i < 1800; i++) {
+      const r = 8 + rand() * 25;
+      const theta = rand() * Math.PI * 2;
+      const phi = Math.acos(2 * rand() - 1);
+      coords[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+      coords[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
+      coords[i * 3 + 2] = r * Math.cos(phi);
+    }
     const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(positions.flat()), 3));
+    g.setAttribute('position', new THREE.BufferAttribute(coords, 3));
     return g;
-  }, [positions]);
+  }, []);
+  useEffect(() => () => geo.dispose(), [geo]);
   useFrame(() => {
     if (ref.current) {
       ref.current.rotation.y += 0.0004;
@@ -107,8 +114,14 @@ export default function MemoriesScreen({ photos, name }: { photos: string[]; nam
     });
   }, [photos]);
 
+  useEffect(() => {
+    return () => {
+      document.body.style.cursor = 'auto';
+    };
+  }, []);
+
   return (
-    <div className="w-full h-screen relative overflow-hidden bg-black">
+    <div className="w-full h-dvh relative overflow-hidden bg-black">
       <Canvas camera={{ position: [0, 0, 15], fov: 60 }} gl={{ antialias: true, alpha: true, failIfMajorPerformanceCaveat: false, powerPreference: 'default' }}>
         <ambientLight intensity={0.8} />
         <directionalLight position={[10, 10, 10]} intensity={1.2} />

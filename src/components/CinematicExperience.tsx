@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
+import gsap from 'gsap';
+import Lenis from 'lenis';
 import { AnimatePresence, motion } from 'framer-motion';
 import PullableScreen from '../components/PullableScreen';
 import BirthdayScreen from '../components/BirthdayScreen';
@@ -11,6 +13,9 @@ import MemoriesScreen from '../components/MemoriesScreen';
 import Cover from '../components/Cover';
 import FlowerClouds from '../components/FlowerClouds';
 import { BirthdayData, DEFAULT_DATA } from '../lib/birthday';
+import ClickSpark from './reactbits/ClickSpark/ClickSpark';
+import Magnet from './reactbits/Magnet/Magnet';
+import StarBorder from './reactbits/StarBorder/StarBorder';
 
 type Step = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 
@@ -25,12 +30,27 @@ export default function CinematicExperience({
   const [e, setE] = useState<Step>(0);
   const [coverOn, setCoverOn] = useState(false);
   const musicRef = useRef<HTMLAudioElement | null>(null);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const fadeIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const stopAudio = useCallback(() => {
+    if (fadeIntervalRef.current) {
+      clearInterval(fadeIntervalRef.current);
+      fadeIntervalRef.current = null;
+    }
+    if (audioCtxRef.current) {
+      audioCtxRef.current.close().catch(() => {});
+      audioCtxRef.current = null;
+    }
+  }, []);
 
   // WebAudio "Happy Birthday" melody (no external file)
   const playMelody = useCallback(() => {
     try {
+      stopAudio();
       const AC = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       const ctx = new AC();
+      audioCtxRef.current = ctx;
       const master = ctx.createGain();
       master.gain.value = 0.22;
       master.connect(ctx.destination);
@@ -73,15 +93,17 @@ export default function CinematicExperience({
       audio.loop = true;
       audio.volume = 0;
       audio.play().catch(() => {});
-      const iv = setInterval(() => {
+      fadeIntervalRef.current = setInterval(() => {
         if (!musicRef.current) {
-          clearInterval(iv);
+          if (fadeIntervalRef.current) clearInterval(fadeIntervalRef.current);
+          fadeIntervalRef.current = null;
           return;
         }
         if (musicRef.current.volume < 0.95) {
           musicRef.current.volume = Math.min(musicRef.current.volume + 0.02, 0.95);
-        } else {
-          clearInterval(iv);
+        } else if (fadeIntervalRef.current) {
+          clearInterval(fadeIntervalRef.current);
+          fadeIntervalRef.current = null;
         }
       }, 80);
     } catch {
@@ -90,21 +112,50 @@ export default function CinematicExperience({
   }, []);
 
   const open = useCallback(() => {
+    if (coverOn) return;
     startMusic();
     playMelody();
     setCoverOn(true); // flower cover animation
-  }, [startMusic, playMelody]);
+  }, [coverOn, startMusic, playMelody]);
 
   const restart = useCallback(() => {
+    stopAudio();
     setCoverOn(false);
     go(0);
-  }, [go]);
+  }, [go, stopAudio]);
 
   useEffect(() => {
+    const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    let lenis: Lenis | null = null;
+    let rafId = 0;
+
+    if (!reduced) {
+      lenis = new Lenis({ duration: 1.05, smoothWheel: true });
+      const raf = (time: number) => {
+        lenis?.raf(time);
+        rafId = requestAnimationFrame(raf);
+      };
+      rafId = requestAnimationFrame(raf);
+    }
+
+    const ctx = gsap.context(() => {
+      if (!reduced) {
+        gsap.fromTo(
+          '.polaroid-card',
+          { y: 24, opacity: 0, rotate: -1.5 },
+          { y: 0, opacity: 1, rotate: 0, duration: 0.9, ease: 'power3.out', clearProps: 'transform' }
+        );
+      }
+    });
+
     return () => {
+      cancelAnimationFrame(rafId);
+      lenis?.destroy();
+      ctx.revert();
+      stopAudio();
       musicRef.current?.pause();
     };
-  }, []);
+  }, [stopAudio]);
 
   const p0 = data.photos[0];
 
@@ -128,56 +179,75 @@ export default function CinematicExperience({
   );
 
   return (
-    <main className={`birthday-container ${e > 0 ? 'bg-black' : ''}`}>
-      {e === 0 && <div className="soft-pink-bg" aria-hidden="true" />}
-      {e === 0 && hearts}
-      {e === 0 && <FlowerClouds />}
+    <ClickSpark
+      sparkColor={['#ff6b9d', '#d8acff', '#ffd166', '#ffffff']}
+      sparkSize={11}
+      sparkRadius={22}
+      sparkCount={10}
+      duration={460}
+      easing="spring"
+      className="min-h-dvh"
+    >
+      <main className={`birthday-container ${e > 0 ? 'bg-black' : ''}`}>
+        {e === 0 && <div className="soft-pink-bg" aria-hidden="true" />}
+        {e === 0 && hearts}
+        {e === 0 && <FlowerClouds />}
 
-      <audio ref={musicRef} src="/music.mp4" loop preload="auto" style={{ display: 'none' }} />
+        <audio ref={musicRef} src="/music.mp4" loop preload="auto" style={{ display: 'none' }} />
 
-      {coverOn && <Cover onCovered={() => go(1)} onDone={() => setCoverOn(false)} />}
+        {coverOn && <Cover onCovered={() => go(1)} onDone={() => setCoverOn(false)} />}
 
-      <AnimatePresence mode="wait">
-        {e === 0 && (
-          <motion.div
-            key="welcome"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            transition={{ duration: 0.9 }}
-          >
-            <div className="main-stage">
-              <div className="flex flex-col items-center">
-                <div className="polaroid-card">
-                  <div className="photo-wrapper">
-                    {p0 ? (
-                      <img src={p0} alt={data.name} className="photo-img" />
-                    ) : (
-                      <img src="/images/emoji.png" alt="Birthday" className="photo-img" />
-                    )}
+        <AnimatePresence mode="wait">
+          {e === 0 && (
+            <motion.div
+              key="welcome"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.9 }}
+            >
+              <div className="main-stage">
+                <div className="flex flex-col items-center">
+                  <div className="polaroid-card">
+                    <div className="photo-wrapper">
+                      {p0 ? (
+                        <img src={p0} alt={data.name} className="photo-img" />
+                      ) : (
+                        <img src="/images/emoji.png" alt="Birthday" className="photo-img" />
+                      )}
+                    </div>
+                    <p className="birthday-title">Happy Birthday, {data.name}!</p>
+                    <p className="tap-hint">🎁 A little surprise is waiting for you</p>
                   </div>
-                  <p className="birthday-title">Happy Birthday, {data.name}!</p>
-                  <p className="tap-hint">🎁 A little surprise is waiting for you</p>
+
+                  <Magnet padding={56} magnetStrength={4} scale={1.03} className="mt-6">
+                    <StarBorder
+                      as="button"
+                      onClick={open}
+                      theme="light"
+                      color="#ff6b9d"
+                      trailColor="#d8acff"
+                      backgroundColor="linear-gradient(135deg, #ff7aa8, #d85c8a)"
+                      textColor="#ffffff"
+                      borderColor="rgba(255,255,255,0.45)"
+                      radius={999}
+                      thickness={2}
+                      glow={0.6}
+                      className="open-btn-star active:scale-[0.98] transition-transform"
+                    >
+                      ✨ Open Your Surprise ✨
+                    </StarBorder>
+                  </Magnet>
+
+                  {showCreateLink && (
+                    <Link href="/create" className="create-link">
+                      🎂 Make one for someone you love
+                    </Link>
+                  )}
                 </div>
-
-                <motion.button
-                  onClick={open}
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.96 }}
-                  className="open-btn"
-                >
-                  ✨ Open Your Surprise ✨
-                </motion.button>
-
-                {showCreateLink && (
-                  <Link href="/create" className="create-link">
-                    🎂 Make one for someone you love
-                  </Link>
-                )}
               </div>
-            </div>
-          </motion.div>
-        )}
+            </motion.div>
+          )}
 
         {e === 1 && (
           <motion.div key="intro" className="screen-wrapper">
@@ -232,6 +302,7 @@ export default function CinematicExperience({
           🔄 Experience Again
         </button>
       )}
-    </main>
+      </main>
+    </ClickSpark>
   );
 }

@@ -35,9 +35,14 @@ export default function CreatePage() {
     const list = Array.from(files).slice(0, Math.max(0, room));
     if (!list.length) return;
     setBusy('compressing photos…');
-    const compressed = await Promise.all(list.map((f) => compressFile(f, 900, 0.72)));
-    setPhotos((prev) => [...prev, ...compressed].slice(0, MAX_PHOTOS));
-    setBusy(null);
+    try {
+      const compressed = await Promise.all(list.map((f) => compressFile(f, 900, 0.72)));
+      setPhotos((prev) => [...prev, ...compressed].slice(0, MAX_PHOTOS));
+      setBusy(null);
+    } catch {
+      setBusy('could not read one of the photos');
+      setTimeout(() => setBusy(null), 2000);
+    }
   }, [photos.length]);
 
   const removePhoto = useCallback((i: number) => {
@@ -71,12 +76,17 @@ export default function CreatePage() {
   const makeCards = useCallback(async () => {
     if (!photos.length) return;
     setBusy('drawing story cards…');
-    const d = buildData();
-    const cards = await makeStoryCards(photos, d.name, theme, 10, d.gender);
-    cards.forEach((c, i) => {
-      window.setTimeout(() => downloadCanvas(c.canvas, `story-card-${i + 1}-${d.name}.png`), i * 250);
-    });
-    setBusy(null);
+    try {
+      const d = buildData();
+      const cards = await makeStoryCards(photos, d.name, theme, 10, d.gender);
+      cards.forEach((c, i) => {
+        window.setTimeout(() => downloadCanvas(c.canvas, `story-card-${i + 1}-${d.name}.png`), i * 250);
+      });
+      setBusy(null);
+    } catch {
+      setBusy('could not draw story cards');
+      setTimeout(() => setBusy(null), 2000);
+    }
   }, [photos, name, message, theme, gender]);
 
   const makeVideo = useCallback(async () => {
@@ -92,10 +102,11 @@ export default function CreatePage() {
         gender: d.gender,
       });
       const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
+      const blobUrl = URL.createObjectURL(blob);
+      a.href = blobUrl;
       a.download = `story-${d.name}.${mimeType.includes('mp4') ? 'mp4' : 'webm'}`;
       a.click();
-      URL.revokeObjectURL(a.href);
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
     } catch {
       setBusy('could not record a video in this browser');
       setTimeout(() => setBusy(null), 2000);

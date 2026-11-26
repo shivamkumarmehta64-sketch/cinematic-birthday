@@ -1,7 +1,7 @@
 'use client';
 
 import { motion, AnimatePresence } from 'framer-motion';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 
 const DEFAULT_LETTER = `Happiest birthday my gurl 😍✨
 
@@ -29,12 +29,17 @@ export default function MessageScreen({ message, name = 'you', onNext }: { messa
   const [shown, setShown] = useState(false);
   const [typed, setTyped] = useState('');
   const [done, setDone] = useState(false);
+  const openTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (openTimerRef.current) clearTimeout(openTimerRef.current);
+    };
+  }, []);
 
   // typewriter effect
   useEffect(() => {
     if (!shown) return;
-    setTyped('');
-    setDone(false);
     let i = 0;
     const iv = setInterval(() => {
       i++;
@@ -45,7 +50,7 @@ export default function MessageScreen({ message, name = 'you', onNext }: { messa
       }
     }, 32);
     return () => clearInterval(iv);
-  }, [shown]);
+  }, [shown, LETTER_TEXT]);
 
   return (
     <div className="w-full min-h-screen flex items-center justify-center relative px-4">
@@ -61,7 +66,12 @@ export default function MessageScreen({ message, name = 'you', onNext }: { messa
           <motion.div
             whileHover={shown ? {} : { scale: 1.04, rotateZ: -1 }}
             whileTap={shown ? {} : { scale: 0.97 }}
-            onClick={shown ? undefined : () => { setOpened(true); setTimeout(() => setShown(true), 700); }}
+            onClick={opened || shown ? undefined : () => {
+              setOpened(true);
+              setTyped('');
+              setDone(false);
+              openTimerRef.current = setTimeout(() => setShown(true), 700);
+            }}
             style={{ position: 'relative', width: '280px', height: '190px', cursor: shown ? 'default' : 'pointer' }}
           >
             <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(160deg, #fff0f6 0%, #ffe0ef 100%)', border: '1px solid rgba(214, 91, 139, 0.2)', boxShadow: '0 10px 24px rgba(214, 91, 139, 0.12), 0 4px 8px rgba(0,0,0,0.02), inset 0 1px 3px rgba(255,255,255,0.8)', borderRadius: '4px' }} />
@@ -83,7 +93,7 @@ export default function MessageScreen({ message, name = 'you', onNext }: { messa
             </div>
             {!opened && (
               <div style={{ position: 'absolute', bottom: '28px', left: 0, right: 0, textAlign: 'center' }}>
-                <div style={{ fontFamily: "'Cormorant Garamond', serif", fontStyle: 'italic', fontSize: '16px', color: '#d65b8b' }}>For You, My Darlzzz</div>
+                <div style={{ fontFamily: "'Cormorant Garamond', serif", fontStyle: 'italic', fontSize: '16px', color: '#d65b8b' }}>For You, {name}</div>
                 <div style={{ fontFamily: "'Cinzel', serif", fontSize: '8px', letterSpacing: '0.18em', color: 'rgba(124, 60, 100, 0.6)', marginTop: '3px', textTransform: 'uppercase' }}>Tap to unseal 💌</div>
               </div>
             )}
@@ -100,7 +110,7 @@ export default function MessageScreen({ message, name = 'you', onNext }: { messa
         <AnimatePresence>
           {shown && (
             <motion.div
-              style={{ position: 'fixed', inset: 0, background: 'rgba(255, 230, 245, 0.5)', backdropFilter: 'blur(8px)', zIndex: 50, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '16px', gap: '20px' }}
+              style={{ position: 'fixed', inset: 0, background: 'rgba(255, 230, 245, 0.5)', backdropFilter: 'blur(8px)', zIndex: 50, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '16px', gap: '20px', overflowY: 'auto' }}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}

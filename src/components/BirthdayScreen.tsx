@@ -41,9 +41,26 @@ export default function BirthdayScreen({ name = 'My Girl', onNext }: { name?: st
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const cutlineRef = useRef<HTMLElement | null>(null);
 
-  const getPos = useCallback((e: React.PointerEvent | React.TouchEvent) => {
-    const p = 'touches' in e ? e.touches[0] : (e as React.PointerEvent);
-    return { x: p.clientX, y: p.clientY };
+  const getPos = useCallback((e: React.PointerEvent) => {
+    const cv = canvasRef.current;
+    if (!cv) return { x: e.clientX, y: e.clientY };
+    const rect = cv.getBoundingClientRect();
+    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  }, []);
+
+  useEffect(() => {
+    const cv = canvasRef.current;
+    if (!cv) return;
+    const syncSize = () => {
+      const rect = cv.getBoundingClientRect();
+      if (rect.width > 0 && rect.height > 0) {
+        cv.width = Math.round(rect.width);
+        cv.height = Math.round(rect.height);
+      }
+    };
+    syncSize();
+    window.addEventListener('resize', syncSize);
+    return () => window.removeEventListener('resize', syncSize);
   }, []);
 
   // cumulative total travel tracked independently of re-renders
@@ -73,44 +90,49 @@ export default function BirthdayScreen({ name = 'My Girl', onNext }: { name?: st
     }
   }, [progress]);
 
-  const onDown = useCallback((e: React.PointerEvent | React.TouchEvent) => {
+  const onDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     if (!ready || sliced) return;
+    e.currentTarget.setPointerCapture?.(e.pointerId);
     setCutting(true);
     last.current = getPos(e);
   }, [ready, sliced, getPos]);
 
-  const onMove = useCallback((e: React.PointerEvent | React.TouchEvent) => {
+  const onMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     if (!cutting || sliced) return;
     const pos = getPos(e);
     runCut(last.current, pos);
     last.current = pos;
   }, [cutting, sliced, runCut, getPos]);
 
-  const onUp = useCallback(() => {
+  const onUp = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    e.currentTarget.releasePointerCapture?.(e.pointerId);
     if (cutting) setCutting(false);
   }, [cutting]);
 
   // when sliced, fire confetti/fireworks
   useEffect(() => {
     if (!sliced) return;
-    const targets = document.querySelectorAll('.celebrate-cell') as NodeListOf<HTMLElement>;
-    const tl = gsap.timeline();
-    targets.forEach((el, i) => {
-      const x = (Math.random() - 0.5) * 200;
-      const y = -((40 + Math.random() * 80));
-      const dur = 0.8 + Math.random() * 0.6;
-      tl.to(el, { x: x, y: y, opacity: 0, rotation: (Math.random() - 0.5) * 720, duration: dur, ease: 'power2.out' }, 0);
+    const ctx = gsap.context(() => {
+      const targets = document.querySelectorAll('.celebrate-cell') as NodeListOf<HTMLElement>;
+      const tl = gsap.timeline();
+      targets.forEach((el) => {
+        const x = (Math.random() - 0.5) * 200;
+        const y = -((40 + Math.random() * 80));
+        const dur = 0.8 + Math.random() * 0.6;
+        tl.to(el, { x: x, y: y, opacity: 0, rotation: (Math.random() - 0.5) * 720, duration: dur, ease: 'power2.out' }, 0);
+      });
     });
+    return () => ctx.revert();
   }, [sliced]);
 
   const circumference = 2 * Math.PI * 52;
 
   return (
-    <div className="w-full min-h-screen flex items-center justify-center overflow-hidden relative">
-      <div className="relative w-full max-w-4xl min-h-screen flex flex-col items-center justify-center px-6 text-center z-10">
+    <div className="w-full min-h-dvh flex items-center justify-center overflow-hidden relative">
+      <div className="relative w-full max-w-4xl min-h-dvh flex flex-col items-center justify-center px-6 text-center z-10">
         <canvas
           ref={canvasRef}
-          className="absolute inset-0 z-20 pointer-events-none"
+          className="absolute inset-0 w-full h-full z-20 pointer-events-none"
           style={{ pointerEvents: 'none' }}
         />
 
@@ -139,7 +161,7 @@ export default function BirthdayScreen({ name = 'My Girl', onNext }: { name?: st
         )}
 
         {/* cake */}
-        <div className="relative mt-8" onPointerMove={onMove} onTouchMove={onMove} onPointerDown={onDown} onTouchStart={onDown} onPointerUp={onUp} onTouchEnd={onUp} style={{ touchAction: 'none' }}>
+        <div className="relative mt-8" onPointerMove={onMove} onPointerDown={onDown} onPointerUp={onUp} onPointerCancel={onUp} style={{ touchAction: 'none' }}>
           <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: ready || sliced ? 1 : 0.6 }} transition={{ duration: 1.1, delay: 0.6 }}>
             <CakeSVG />
           </motion.div>

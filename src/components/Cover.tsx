@@ -38,7 +38,10 @@ export default function Cover({ onCovered, onDone }: { onCovered: () => void; on
   }, [onCovered, onDone]);
 
   useEffect(() => {
-    setDims({ w: window.innerWidth, h: window.innerHeight });
+    const id = requestAnimationFrame(() => {
+      setDims({ w: window.innerWidth, h: window.innerHeight });
+    });
+    return () => cancelAnimationFrame(id);
   }, []);
 
   const cells = useMemo<Cell[]>(() => {

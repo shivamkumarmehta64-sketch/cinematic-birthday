@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 
 // Ambient pulsing pink glow (matches original aW/a5 background layers)
 export function AmbientGlow({ active }: { active: boolean }) {
@@ -33,18 +33,23 @@ export function AmbientGlow({ active }: { active: boolean }) {
 
 // Floating pink dots (original a3/aG)
 export function PinkDots({ active }: { active: boolean }) {
-  const dots = React.useRef(
-    Array.from({ length: 30 }).map(() => ({
-      s: 1.2 + 2.5 * Math.random(),
-      x: 20 + 60 * Math.random(),
-      y: 10 + 65 * Math.random(),
-      d: 4 + 5 * Math.random(),
-      dl: 6 * Math.random(),
-      dx: -15 + 30 * Math.random(),
-      dy: -(15 + 25 * Math.random()),
-      o: 0.15 + 0.4 * Math.random(),
-    }))
-  ).current;
+  const dots = React.useMemo(() => {
+    let s = 1337;
+    const rnd = () => {
+      s = (s * 1664525 + 1013904223) >>> 0;
+      return s / 0x100000000;
+    };
+    return Array.from({ length: 30 }).map(() => ({
+      s: 1.2 + 2.5 * rnd(),
+      x: 20 + 60 * rnd(),
+      y: 10 + 65 * rnd(),
+      d: 4 + 5 * rnd(),
+      dl: 6 * rnd(),
+      dx: -15 + 30 * rnd(),
+      dy: -(15 + 25 * rnd()),
+      o: 0.15 + 0.4 * rnd(),
+    }));
+  }, []);
   if (!active) return null;
   return (
     <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 2 }}>
@@ -152,50 +157,55 @@ function Balloon({
 
 // Pullable screen (used for Intro and String)
 export default function PullableScreen({ onNext }: { onNext: () => void }) {
-  const [lit, setLit] = useState(true);
+  const [lit] = useState(true);
   const [fled, setFled] = useState(false);
   const [drag, setDrag] = useState({ on: false, sy: 0, cy: 0, sx: 0, cx: 0 });
+  const dragRef = useRef(drag);
+  const nextTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const start = useCallback((e: React.PointerEvent | React.TouchEvent) => {
+  useEffect(() => {
+    dragRef.current = drag;
+  }, [drag]);
+
+  useEffect(() => {
+    return () => {
+      if (nextTimerRef.current) clearTimeout(nextTimerRef.current);
+    };
+  }, []);
+
+  const start = useCallback((e: React.PointerEvent) => {
     if (!lit || fled) return;
-    const p = 'touches' in e ? e.touches[0] : (e as React.PointerEvent);
-    setDrag({ on: true, sy: p.clientY, cy: p.clientY, sx: p.clientX, cx: p.clientX });
+    setDrag({ on: true, sy: e.clientY, cy: e.clientY, sx: e.clientX, cx: e.clientX });
   }, [lit, fled]);
 
-  const move = useCallback((e: React.PointerEvent | React.TouchEvent) => {
-    const p = 'touches' in e ? e.touches[0] : (e as React.PointerEvent);
-    setDrag(d => ({ ...d, cy: p.clientY, cx: p.clientX }));
+  const move = useCallback((clientX: number, clientY: number) => {
+    setDrag(d => (d.on ? { ...d, cy: clientY, cx: clientX } : d));
   }, []);
 
   const end = useCallback(() => {
-    setDrag(d => {
-      if (d.on && d.cy - d.sy > 45) {
-        setFled(true);
-        setTimeout(() => onNext(), 1600);
-        return { on: false, sy: 0, cy: 0, sx: 0, cx: 0 };
-      }
-      return d.on ? { on: false, sy: 0, cy: 0, sx: 0, cx: 0 } : d;
-    });
+    const d = dragRef.current;
+    if (!d.on) return;
+    setDrag({ on: false, sy: 0, cy: 0, sx: 0, cx: 0 });
+    if (d.cy - d.sy > 45) {
+      setFled(true);
+      if (nextTimerRef.current) clearTimeout(nextTimerRef.current);
+      nextTimerRef.current = setTimeout(() => onNext(), 1600);
+    }
   }, [onNext]);
 
   useEffect(() => {
     if (!drag.on) return;
-    const mm = (e: MouseEvent) => move({ clientX: e.clientX, clientY: e.clientY } as React.PointerEvent);
-    const mu = () => end();
-    const tm = (e: TouchEvent) => move(e as unknown as React.TouchEvent);
-    const te = () => end();
-    window.addEventListener('mousemove', mm, { passive: false });
-    window.addEventListener('mouseup', mu);
-    window.addEventListener('touchmove', tm, { passive: false });
-    window.addEventListener('touchend', te);
+    const pm = (e: PointerEvent) => move(e.clientX, e.clientY);
+    const pu = () => end();
+    window.addEventListener('pointermove', pm, { passive: false });
+    window.addEventListener('pointerup', pu);
+    window.addEventListener('pointercancel', pu);
     return () => {
-      window.removeEventListener('mousemove', mm);
-      window.removeEventListener('mouseup', mu);
-      window.removeEventListener('touchmove', tm);
-      window.removeEventListener('touchend', te);
+      window.removeEventListener('pointermove', pm);
+      window.removeEventListener('pointerup', pu);
+      window.removeEventListener('pointercancel', pu);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [drag.on, end]);
+  }, [drag.on, move, end]);
 
   const c = drag.on ? Math.min(Math.max(0, drag.cy - drag.sy), 90) : 0;
   const h = drag.on ? Math.min(Math.max(-60, drag.cx - drag.sx), 60) : 0;
@@ -203,9 +213,8 @@ export default function PullableScreen({ onNext }: { onNext: () => void }) {
   return (
     <div
       className="fixed inset-0 overflow-hidden flex flex-col items-center justify-center"
-      style={{ background: 'transparent', userSelect: 'none', WebkitUserSelect: 'none' }}
+      style={{ background: 'transparent', userSelect: 'none', WebkitUserSelect: 'none', touchAction: 'none' }}
       onPointerDown={start}
-      onTouchStart={start}
     >
       <AmbientGlow active={lit && !fled} />
       <PinkDots active={lit && !fled} />

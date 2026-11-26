@@ -157,7 +157,7 @@ export function drawTitle(ctx: CanvasRenderingContext2D, t: StoryTheme, text: st
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   const baseSize = STORY_W * 0.058;
-  ctx.font = `700 ${baseSize}px "Playful Sans Deva", "Pacifico", cursive`;
+  ctx.font = `700 ${baseSize}px "Playpen Sans Deva", "Pacifico", cursive`;
   const tw = ctx.measureText(text).width;
   const cap = (STORY_W - 80) / Math.max(tw, 1);
   const size = baseSize * Math.min(1, cap);
